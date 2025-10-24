@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор</title>
+    <link th:href="@{/css/style.css}" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+    <!-- Информация о студенте -->
+    <div class="student-info">
+        <h2>Информация о студенте</h2>
+        <p><strong>ФИО:</strong> Иванов Иван Иванович</p>
+        <p><strong>Курс:</strong> 3</p>
+        <p><strong>Группа:</strong> ПИ-21</p>
+        <p><strong>Год:</strong> 2024</p>
+    </div>
+
+    <!-- Калькулятор -->
+    <div class="calculator">
+        <h1>Калькулятор</h1>
+
+        <form th:action="@{/calculate}" method="post" id="calculatorForm">
+            <div class="input-group">
+                <label for="number1">Первое число:</label>
+                <input type="text"
+                       id="number1"
+                       name="number1"
+                       th:value="${number1}"
+                       placeholder="Введите число"
+                       required
+                       onkeydown="handleKeyDown(event)">
+            </div>
+
+            <div class="input-group">
+                <label for="operation">Операция:</label>
+                <select id="operation" name="operation" th:value="${operation}">
+                    <option value="add">Сложение (+)</option>
+                    <option value="subtract">Вычитание (-)</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label for="number2">Второе число:</label>
+                <input type="text"
+                       id="number2"
+                       name="number2"
+                       th:value="${number2}"
+                       placeholder="Введите число"
+                       required
+                       onkeydown="handleKeyDown(event)">
+            </div>
+
+            <button type="submit" class="calculate-btn">Вычислить</button>
+        </form>
+
+        <!-- Результат -->
+        <div class="result" th:if="${result != null and result != ''}">
+            <h3>Результат: <span th:text="${result}"></span></h3>
+        </div>
+
+        <!-- Ошибка -->
+        <div class="error" th:if="${error != null and error != ''}">
+            <h3 style="color: red;">Ошибка: <span th:text="${error}"></span></h3>
+        </div>
+
+        <!-- Подсказки -->
+        <div class="hints">
+            <p><strong>Подсказки:</strong></p>
+            <ul>
+                <li>Можно использовать как точку (.), так и запятую (,) как разделитель дробной части</li>
+                <li>Диапазон чисел: от -1,000,000,000,000.000000 до +1,000,000,000,000.000000</li>
+                <li>Поддерживаются комбинации Ctrl+C (копирование) и Ctrl+V (вставка)</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Обработка комбинаций клавиш Ctrl+C и Ctrl+V
+    function handleKeyDown(event) {
+        // Ctrl+C
+        if (event.ctrlKey && event.key === 'c') {
+            return true; // Разрешаем стандартное поведение
+        }
+        // Ctrl+V
+        if (event.ctrlKey && event.key === 'v') {
+            return true; // Разрешаем стандартное поведение
+        }
+    }
+
+    // Автофокус на первом поле ввода
+    document.addEventListener('DOMContentLoaded', function() {
+        const number1Input = document.getElementById('number1');
+        if (number1Input && !number1Input.value) {
+            number1Input.focus();
+        }
+    });
+</script>
+</body>
+</html>
