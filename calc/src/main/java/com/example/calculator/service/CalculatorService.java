@@ -1,8 +1,12 @@
 package com.example.calculator.service;
 
+import com.example.calculator.enums.Operation;
+import com.example.calculator.enums.RoundingType;
+import com.example.calculator.dto.CalculationRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Locale;
@@ -13,127 +17,210 @@ public class CalculatorService {
 
     private static final BigDecimal MIN_VALUE = new BigDecimal("-1000000000000.000000");
     private static final BigDecimal MAX_VALUE = new BigDecimal("1000000000000.000000");
-    private static final int MAX_SCALE = 6;
+    private static final int MAX_INPUT_SCALE = 10;
 
-    // Регулярное выражение для проверки на экспоненциальную форму
+    private final RoundingService roundingService;
     private static final Pattern EXPONENTIAL_PATTERN = Pattern.compile("[eE]");
-    // Регулярное выражение для валидации допустимого формата числа
-    private static final Pattern VALID_NUMBER_PATTERN =
-            Pattern.compile("^-?\\d{1,15}([.,]\\d{0,6})?$");
 
-    public String calculate(String num1Str, String num2Str, String operation) {
-        // Проверка на пустые значения
-        if (num1Str == null || num1Str.trim().isEmpty()) {
-            throw new IllegalArgumentException("Первое число не может быть пустым");
+    @Autowired
+    public CalculatorService(RoundingService roundingService) {
+        this.roundingService = roundingService;
+    }
+
+    public CalculationResult calculate(CalculationRequest request) {
+        try {
+            // Валидация и парсинг входных данных
+            BigDecimal num1 = parseAndValidateNumber(request.getNumber1(), "Первое число");
+            BigDecimal num2 = parseAndValidateNumber(request.getNumber2(), "Второе число");
+            BigDecimal num3 = parseAndValidateNumber(request.getNumber3(), "Третье число");
+            BigDecimal num4 = parseAndValidateNumber(request.getNumber4(), "Четвертое число");
+
+            // Получаем операции (по умолчанию сложение)
+            Operation op1 = request.getOp1() != null ? request.getOp1() : Operation.ADD;
+            Operation op2 = request.getOp2() != null ? request.getOp2() : Operation.ADD;
+            Operation op3 = request.getOp3() != null ? request.getOp3() : Operation.ADD;
+
+            // Шаг 1: Вычисляем выражение в скобках (num2 op2 num3)
+            BigDecimal inBrackets = calculateOperation(num2, num3, op2);
+            inBrackets = roundingService.roundIntermediate(inBrackets);
+            validateRange(inBrackets, "Промежуточный результат в скобках");
+
+            BigDecimal result;
+
+            // Определяем порядок вычислений в зависимости от приоритетов
+            if (isHighPriority(op3) && !isHighPriority(op1)) {
+                // Если op3 (* или /) и op1 (+ или -), то op3 выполняется раньше
+                // Вычисляем: num1 op1 ((num2 op2 num3) op3 num4)
+                BigDecimal rightPart = calculateOperation(inBrackets, num4, op3);
+                rightPart = roundingService.roundIntermediate(rightPart);
+                validateRange(rightPart, "Промежуточный результат (правая часть)");
+
+                result = calculateOperation(num1, rightPart, op1);
+            } else {
+                // Иначе стандартный порядок: ((num1 op1 (num2 op2 num3)) op3 num4)
+                BigDecimal leftPart = calculateOperation(num1, inBrackets, op1);
+                leftPart = roundingService.roundIntermediate(leftPart);
+                validateRange(leftPart, "Промежуточный результат (левая часть)");
+
+                result = calculateOperation(leftPart, num4, op3);
+            }
+
+            result = roundingService.roundIntermediate(result);
+            validateRange(result, "Финальный результат");
+
+            // Округление до целых по выбранному методу
+            BigDecimal roundedResult = roundingService.roundFinal(result,
+                    request.getRoundingType() != null ? request.getRoundingType() : RoundingType.MATHEMATICAL);
+
+            return new CalculationResult(
+                    formatNumber(result),
+                    formatNumber(roundedResult),
+                    null
+            );
+
+        } catch (IllegalArgumentException e) {
+            return new CalculationResult(null, null, e.getMessage());
+        } catch (ArithmeticException e) {
+            return new CalculationResult(null, null, "Арифметическая ошибка: " + e.getMessage());
         }
-        if (num2Str == null || num2Str.trim().isEmpty()) {
-            throw new IllegalArgumentException("Второе число не может быть пустым");
+    }
+
+    private boolean isHighPriority(Operation op) {
+        return op == Operation.MULTIPLY || op == Operation.DIVIDE;
+    }
+
+    private BigDecimal parseAndValidateNumber(String numberStr, String fieldName) {
+        if (numberStr == null || numberStr.trim().isEmpty()) {
+            return BigDecimal.ZERO;
         }
 
-        // Нормализация разделителей (запятая -> точка)
-        String normalizedNum1 = normalizeNumber(num1Str.trim());
-        String normalizedNum2 = normalizeNumber(num2Str.trim());
+        // Удаляем все пробелы из числа (поддержка формата с пробелами: 986 282 584 876,635029)
+        String cleanedNumber = numberStr.trim().replace(" ", "");
+
+        String normalized = normalizeNumber(cleanedNumber);
 
         // Проверка на экспоненциальную форму
-        validateNoExponentialNotation(normalizedNum1, "первое число");
-        validateNoExponentialNotation(normalizedNum2, "второе число");
-
-        // Проверка формата числа
-        validateNumberFormat(normalizedNum1, "первое число");
-        validateNumberFormat(normalizedNum2, "второе число");
-
-        BigDecimal num1 = parseNumber(normalizedNum1, "первое число");
-        BigDecimal num2 = parseNumber(normalizedNum2, "второе число");
-
-        validateRange(num1, "первое число");
-        validateRange(num2, "второе число");
-
-        BigDecimal result;
-        switch (operation) {
-            case "add":
-                result = num1.add(num2);
-                break;
-            case "subtract":
-                result = num1.subtract(num2);
-                break;
-            default:
-                throw new IllegalArgumentException("Неизвестная операция: " + operation);
+        if (EXPONENTIAL_PATTERN.matcher(normalized).find()) {
+            throw new IllegalArgumentException(fieldName + ": экспоненциальная нотация не поддерживается");
         }
 
-        validateRange(result, "результат");
-        return formatResult(result);
+        try {
+            BigDecimal number = new BigDecimal(normalized);
+
+            // Проверка масштаба
+            if (number.scale() > MAX_INPUT_SCALE) {
+                throw new IllegalArgumentException(fieldName +
+                        ": слишком много знаков после запятой (максимум " + MAX_INPUT_SCALE + ")");
+            }
+
+            // Проверка диапазона
+            validateRange(number, fieldName);
+
+            return number;
+
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Некорректный формат " + fieldName.toLowerCase() + ": " + numberStr);
+        }
+    }
+
+    private BigDecimal calculateOperation(BigDecimal a, BigDecimal b, Operation operation) {
+        switch (operation) {
+            case ADD:
+                return a.add(b);
+            case SUBTRACT:
+                return a.subtract(b);
+            case MULTIPLY:
+                return a.multiply(b);
+            case DIVIDE:
+                if (b.compareTo(BigDecimal.ZERO) == 0) {
+                    throw new ArithmeticException("Деление на ноль");
+                }
+                // Деление с округлением до 10 знаков для промежуточных вычислений
+                return a.divide(b, 6, RoundingMode.HALF_UP);
+            default:
+                throw new IllegalArgumentException("Неизвестная операция");
+        }
     }
 
     private String normalizeNumber(String number) {
-        // Заменяем запятую на точку
         return number.replace(',', '.');
-    }
-
-    private void validateNoExponentialNotation(String number, String fieldName) {
-        if (EXPONENTIAL_PATTERN.matcher(number).find()) {
-            throw new IllegalArgumentException(
-                    fieldName + ": экспоненциальная нотация (например, 123e+2) не поддерживается. " +
-                            "Используйте обычный формат числа."
-            );
-        }
-    }
-
-    private void validateNumberFormat(String number, String fieldName) {
-        if (!VALID_NUMBER_PATTERN.matcher(number).matches()) {
-            throw new IllegalArgumentException(
-                    fieldName + ": недопустимый формат числа. " +
-                            "Допустимы только цифры, знак минуса и разделитель дробной части (точка или запятая). " +
-                            "Максимум 15 цифр в целой части и 6 цифр в дробной."
-            );
-        }
-    }
-
-    private BigDecimal parseNumber(String numberStr, String fieldName) {
-        try {
-            return new BigDecimal(numberStr);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Некорректный формат " + fieldName + ": " + numberStr);
-        }
     }
 
     private void validateRange(BigDecimal number, String fieldName) {
         if (number.compareTo(MIN_VALUE) < 0 || number.compareTo(MAX_VALUE) > 0) {
-            throw new IllegalArgumentException(
-                    fieldName + " выходит за допустимый диапазон. " +
-                            "Допустимый диапазон: от -1,000,000,000,000.000000 до +1,000,000,000,000.000000"
-            );
-        }
-
-        // Проверка масштаба (количества знаков после запятой)
-        if (number.scale() > MAX_SCALE) {
-            throw new IllegalArgumentException(
-                    fieldName + " имеет слишком много знаков после запятой. " +
-                            "Максимум 6 знаков после запятой."
-            );
+            throw new IllegalArgumentException(fieldName +
+                    " выходит за допустимый диапазон (±1,000,000,000,000.000000)");
         }
     }
 
-    private String formatResult(BigDecimal result) {
-        // Используем форматирование с точкой как разделителем дробной части
+    private String formatNumber(BigDecimal number) {
+        if (number == null) return "0";
+
         DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.US);
         symbols.setDecimalSeparator('.');
+        symbols.setGroupingSeparator(' '); // Пробел как разделитель тысяч
 
         DecimalFormat df = new DecimalFormat();
         df.setDecimalFormatSymbols(symbols);
-        df.setGroupingUsed(false); // Без разделителей тысяч
-        df.setMaximumFractionDigits(MAX_SCALE);
+        df.setGroupingUsed(true); // Включаем разделители тысяч
+        df.setGroupingSize(3);
+        df.setMaximumFractionDigits(10);
         df.setMinimumFractionDigits(0);
-        df.setGroupingUsed(false);
 
-        // Убеждаемся, что результат не в экспоненциальной форме
-        String formatted = df.format(result);
-
-        // Дополнительная проверка на случай, если DecimalFormat все же вернет экспоненциальную форму
+        String formatted = df.format(number);
         if (EXPONENTIAL_PATTERN.matcher(formatted).find()) {
-            // Используем toPlainString() для гарантированного получения числа без экспоненты
-            formatted = result.toPlainString();
+            // Если все же получили экспоненту, форматируем вручную
+            String plain = number.toPlainString();
+            // Добавляем пробелы как разделители тысяч
+            return formatWithSpacesManual(plain);
         }
 
         return formatted;
+    }
+
+    // Ручное форматирование с пробелами
+    private String formatWithSpacesManual(String numberStr) {
+        if (numberStr == null || numberStr.isEmpty()) return "0";
+
+        String[] parts = numberStr.split("\\.");
+        String integerPart = parts[0];
+        String decimalPart = parts.length > 1 ? "." + parts[1] : "";
+
+        // Добавляем пробелы каждые 3 цифры справа налево
+        StringBuilder formatted = new StringBuilder();
+        int count = 0;
+
+        for (int i = integerPart.length() - 1; i >= 0; i--) {
+            char c = integerPart.charAt(i);
+            if (c == '-') {
+                formatted.append(c);
+                break;
+            }
+            if (count > 0 && count % 3 == 0) {
+                formatted.append(' ');
+            }
+            formatted.append(c);
+            count++;
+        }
+
+        return formatted.reverse().toString() + decimalPart;
+    }
+
+    // Вложенный класс для результата
+    public static class CalculationResult {
+        private final String result;
+        private final String roundedResult;
+        private final String error;
+
+        public CalculationResult(String result, String roundedResult, String error) {
+            this.result = result;
+            this.roundedResult = roundedResult;
+            this.error = error;
+        }
+
+        public String getResult() { return result; }
+        public String getRoundedResult() { return roundedResult; }
+        public String getError() { return error; }
+        public boolean hasError() { return error != null; }
     }
 }

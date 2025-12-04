@@ -3,100 +3,511 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Калькулятор</title>
+    <title>Финансовый калькулятор с округлениями</title>
     <link th:href="@{/css/style.css}" rel="stylesheet">
 </head>
 <body>
 <div class="container">
     <!-- Информация о студенте -->
     <div class="student-info">
-        <h2>Информация о студенте</h2>
-        <p><strong>ФИО:</strong> Колеснев Степан Алексеевич</p>
-        <p><strong>Курс:</strong> 4</p>
-        <p><strong>Группа:</strong> инфа 4 группа КТС</p>
-        <p><strong>Год:</strong> 2025</p>
+        <h3>Информация о студенте</h3>
+        <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+            <div>
+                <p><strong>ФИО:</strong> Колеснев Степан Алексеевич</p>
+                <p><strong>Курс:</strong> 4</p>
+            </div>
+            <div>
+                <p><strong>Группа:</strong> 4 КТС</p>
+                <p><strong>Год:</strong> 2025</p>
+            </div>
+        </div>
     </div>
 
-    <!-- Калькулятор -->
-    <div class="calculator">
-        <h1>Калькулятор</h1>
+    <h1>Финансовый калькулятор с округлениями</h1>
 
-        <form th:action="@{/calculate}" method="post" id="calculatorForm">
+    <!-- Графическое представление формулы -->
+    <div class="expression">
+            <span class="expression-part" id="display-num1">
+                <span th:text="${request.number1 != null ? #strings.replace(request.number1, ',', '.') : '0'}">0</span>
+            </span>
+        <span class="expression-operator" th:text="${request.op1Symbol}">+</span>
+        <span class="expression-brackets">(</span>
+        <span class="expression-part" id="display-num2">
+                <span th:text="${request.number2 != null ? #strings.replace(request.number2, ',', '.') : '0'}">0</span>
+            </span>
+        <span class="expression-operator" th:text="${request.op2Symbol}">+</span>
+        <span class="expression-part" id="display-num3">
+                <span th:text="${request.number3 != null ? #strings.replace(request.number3, ',', '.') : '0'}">0</span>
+            </span>
+        <span class="expression-brackets">)</span>
+        <span class="expression-operator" th:text="${request.op3Symbol}">+</span>
+        <span class="expression-part" id="display-num4">
+                <span th:text="${request.number4 != null ? #strings.replace(request.number4, ',', '.') : '0'}">0</span>
+            </span>
+        <span class="expression-operator">=</span>
+        <span th:if="${result != null}" class="expression-part" style="background: #d4edda;">
+                <span th:text="${result}">0</span>
+            </span>
+    </div>
+
+    <form th:action="@{/calculate}" method="post" id="calculatorForm">
+        <!-- Первая строка: Число1 и операция -->
+        <div class="input-row">
             <div class="input-group">
-                <label for="number1">Первое число:</label>
+                <label>Число 1:</label>
                 <input type="text"
-                       id="number1"
                        name="number1"
-                       th:value="${number1}"
-                       placeholder="Введите число"
-                       required
-                       onkeydown="handleKeyDown(event)">
+                       id="number1"
+                       th:value="${request.number1}"
+                       class="number-input"
+                       placeholder="0"
+                       onkeydown="handleKeyDown(event, this)"
+                       oninput="formatNumberInput(this)"
+                       onblur="finalizeFormat(this)">
+                <div class="example-number">Пример: 986 282 584 876.635029</div>
             </div>
 
+            <select name="op1" id="op1" class="operation-select" onchange="updateDisplay()">
+                <option th:each="op : ${operations}"
+                        th:value="${op}"
+                        th:text="${op.symbol}"
+                        th:selected="${request.op1 == op}">
+                </option>
+            </select>
+
+            <span class="expression-brackets" style="font-size: 24px;">(</span>
+        </div>
+
+        <!-- Вторая строка: Число2 и операция -->
+        <div class="input-row">
             <div class="input-group">
-                <label for="operation">Операция:</label>
-                <select id="operation" name="operation" th:value="${operation}">
-                    <option value="add">Сложение (+)</option>
-                    <option value="subtract">Вычитание (-)</option>
+                <label>Число 2:</label>
+                <input type="text"
+                       name="number2"
+                       id="number2"
+                       th:value="${request.number2}"
+                       class="number-input"
+                       placeholder="0"
+                       onkeydown="handleKeyDown(event, this)"
+                       oninput="formatNumberInput(this)"
+                       onblur="finalizeFormat(this)">
+                <div class="example-number">Пример: 123 456.666666</div>
+            </div>
+        </div>
+
+        <!-- Третья строка: Операция и Число3 -->
+        <div class="input-row">
+            <select name="op2" id="op2" class="operation-select" onchange="updateDisplay()">
+                <option th:each="op : ${operations}"
+                        th:value="${op}"
+                        th:text="${op.symbol}"
+                        th:selected="${request.op2 == op}">
+                </option>
+            </select>
+
+            <div class="input-group">
+                <label>Число 3:</label>
+                <input type="text"
+                       name="number3"
+                       id="number3"
+                       th:value="${request.number3}"
+                       class="number-input"
+                       placeholder="0"
+                       onkeydown="handleKeyDown(event, this)"
+                       oninput="formatNumberInput(this)"
+                       onblur="finalizeFormat(this)">
+                <div class="example-number">Пример: 987 654.777777</div>
+            </div>
+
+            <span class="expression-brackets" style="font-size: 24px;">)</span>
+        </div>
+
+        <!-- Четвертая строка: Операция и Число4 -->
+        <div class="input-row">
+            <select name="op3" id="op3" class="operation-select" onchange="updateDisplay()">
+                <option th:each="op : ${operations}"
+                        th:value="${op}"
+                        th:text="${op.symbol}"
+                        th:selected="${request.op3 == op}">
+                </option>
+            </select>
+
+            <div class="input-group">
+                <label>Число 4:</label>
+                <input type="text"
+                       name="number4"
+                       id="number4"
+                       th:value="${request.number4}"
+                       class="number-input"
+                       placeholder="0"
+                       onkeydown="handleKeyDown(event, this)"
+                       oninput="formatNumberInput(this)"
+                       onblur="finalizeFormat(this)">
+                <div class="example-number">Пример: 8.888888</div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <button type="submit" class="calculate-btn">Вычислить</button>
+            <button type="button" class="calculate-btn" onclick="clearForm()" style="background: #6c757d; margin-left: 10px;">Очистить</button>
+        </div>
+    </form>
+
+    <!-- Результаты -->
+    <div th:if="${result != null}" class="result-section">
+        <h3>Результат вычисления:
+            <span th:text="${result}" style="color: #007bff; font-family: 'Courier New', monospace; font-weight: bold;"></span>
+        </h3>
+
+        <div style="margin: 20px 0;">
+            <label><strong>Выбор вида округления:</strong></label>
+            <div class="input-row">
+                <select name="roundingType" id="roundingType" form="calculatorForm" class="operation-select" style="width: 250px;" onchange="this.form.submit()">
+                    <option th:each="rt : ${roundingTypes}"
+                            th:value="${rt}"
+                            th:text="${rt.description}"
+                            th:selected="${request.roundingType == rt}">
+                    </option>
                 </select>
             </div>
-
-            <div class="input-group">
-                <label for="number2">Второе число:</label>
-                <input type="text"
-                       id="number2"
-                       name="number2"
-                       th:value="${number2}"
-                       placeholder="Введите число"
-                       required
-                       onkeydown="handleKeyDown(event)">
-            </div>
-
-            <button type="submit" class="calculate-btn">Вычислить</button>
-        </form>
-
-        <!-- Результат -->
-        <div class="result" th:if="${result != null and result != ''}">
-            <h3>Результат: <span th:text="${result}"></span></h3>
         </div>
 
-        <!-- Ошибка -->
-        <div class="error" th:if="${error != null and error != ''}">
-            <h3 style="color: red;">Ошибка: <span th:text="${error}"></span></h3>
-        </div>
+        <h3>Округленный до целых результат:
+            <span th:text="${roundedResult}" style="color: #28a745; font-size: 24px; font-family: 'Courier New', monospace; font-weight: bold;"></span>
+        </h3>
+    </div>
 
-        <!-- Подсказки -->
-        <div class="hints">
-            <p><strong>Подсказки:</strong></p>
-            <ul>
-                <li>Можно использовать как точку (.), так и запятую (,) как разделитель дробной части</li>
-                <li>Диапазон чисел: от -1,000,000,000,000.000000 до +1,000,000,000,000.000000</li>
-                <li>Поддерживаются комбинации Ctrl+C (копирование) и Ctrl+V (вставка)</li>
-            </ul>
+    <!-- Ошибка -->
+    <div th:if="${error != null}" class="error">
+        <h3 style="color: red;">Ошибка: <span th:text="${error}"></span></h3>
+    </div>
+
+    <!-- Подсказки и информация -->
+    <div class="hints">
+        <p><strong>📋 Инструкция по использованию:</strong></p>
+        <ul>
+            <li><strong>Формула:</strong> Число1 op1 (Число2 op2 Число3) op3 Число4</li>
+            <li><strong>Приоритет:</strong> (Число2 op2 Число3) вычисляется первым, затем учитывается приоритет * и / над + и -</li>
+            <li><strong>Округление:</strong> Промежуточные результаты округляются до 10 знаков</li>
+            <li><strong>Диапазон:</strong> ±1 000 000 000 000.000000</li>
+        </ul>
+
+        <p><strong>🎯 Особенности ввода:</strong></p>
+        <ul>
+            <li>Поддерживается ввод с пробелами: <code>1 000 000.50</code></li>
+            <li>Можно использовать как точку (.), так и запятую (,) как разделитель</li>
+            <li>Экспоненциальная нотация (например 123e+2) <strong>не поддерживается</strong></li>
+            <li>Отрицательные числа: поддерживаются (используйте минус в начале)</li>
+            <li>Работают Ctrl+C, Ctrl+V, Ctrl+X</li>
+            <li>При вводе автоматически добавляются разделители тысяч</li>
+        </ul>
+
+        <p><strong>🔢 Пример для тестирования:</strong></p>
+        <div style="background: #e9ecef; padding: 10px; border-radius: 5px; font-family: 'Courier New', monospace;">
+            986 282 584 876.635029 - (123 456.666666 * 987 654.777777) - 8.888888
         </div>
     </div>
 </div>
 
 <script>
-    // Обработка комбинаций клавиш Ctrl+C и Ctrl+V
-    function handleKeyDown(event) {
-        // Ctrl+C
-        if (event.ctrlKey && event.key === 'c') {
-            return true; // Разрешаем стандартное поведение
-        }
-        // Ctrl+V
-        if (event.ctrlKey && event.key === 'v') {
-            return true; // Разрешаем стандартное поведение
+    // Храним оригинальное значение для восстановления курсора
+    let lastCursorPos = 0;
+
+    function handleKeyDown(event, input) {
+    // Сохраняем позицию курсора
+    lastCursorPos = input.selectionStart;
+
+    // Разрешаем все комбинации с Ctrl
+    if (event.ctrlKey || event.metaKey) {
+        // Разрешаем Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, Ctrl+Z и другие комбинации
+        const ctrlCombinations = ['c', 'v', 'x', 'a', 'z', 'y', 's'];
+        if (ctrlCombinations.includes(event.key.toLowerCase())) {
+            return true; // Разрешаем стандартное поведение браузера
         }
     }
 
-    // Автофокус на первом поле ввода
+    // Разрешаем навигационные клавиши и функциональные клавиши
+    const navigationKeys = [
+        'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+        'Home', 'End', 'Delete', 'Backspace', 'Tab',
+        'Enter', 'Escape', 'PageUp', 'PageDown',
+        'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
+    ];
+
+    if (navigationKeys.includes(event.key)) {
+        return true;
+    }
+
+    // Разрешаем сочетания клавиш с Shift
+    if (event.shiftKey) {
+        // Разрешаем Shift+Tab для навигации назад
+        if (event.key === 'Tab') {
+            return true;
+        }
+        // Разрешаем другие Shift комбинации
+        return true;
+    }
+
+    // Разрешаем только цифры, точку, запятую, минус и пробел
+    const allowedKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                        '.', ',', '-', ' '];
+
+    // Проверяем, является ли клавиша цифрой (без Shift)
+    const isNumber = event.key >= '0' && event.key <= '9' && !event.shiftKey;
+
+    if (!allowedKeys.includes(event.key) && !isNumber) {
+        event.preventDefault();
+        return false;
+    }
+
+    // Автоматическое форматирование
+    setTimeout(() => {
+        formatNumberInput(input);
+    }, 10);
+}
+
+    function formatNumberInput(input) {
+        // Сохраняем текущее значение и позицию курсора
+        let value = input.value;
+        let cursorPos = input.selectionStart;
+
+        // Заменяем запятую на точку
+        value = value.replace(/,/g, '.');
+
+        // Удаляем все неразрешенные символы
+        value = value.replace(/[^\d.\-\s]/g, '');
+
+        // Проверяем на несколько минусов
+        let minusCount = (value.match(/-/g) || []).length;
+        if (minusCount > 1) {
+            // Оставляем только первый минус
+            value = '-' + value.replace(/-/g, '');
+        }
+
+        // Проверяем на несколько точек
+        let dotCount = (value.match(/\./g) || []).length;
+        if (dotCount > 1) {
+            // Оставляем только первую точку и все что после нее
+            let parts = value.split('.');
+            value = parts[0] + '.' + parts.slice(1).join('');
+        }
+
+        // Запрещаем экспоненциальную нотацию
+        if (value.includes('e') || value.includes('E')) {
+            value = value.replace(/[eE]/g, '');
+            showTempMessage('Экспоненциальная нотация не поддерживается');
+        }
+
+        // Форматируем число с пробелами
+        let formatted = formatWithSpaces(value);
+        input.value = formatted;
+
+        // Обновляем отображение в формуле
+        updateDisplay();
+
+        // Восстанавливаем позицию курсора с учетом добавленных пробелов
+        setTimeout(() => {
+            let newCursorPos = calculateNewCursorPos(cursorPos, value, formatted);
+            input.setSelectionRange(newCursorPos, newCursorPos);
+        }, 0);
+    }
+
+    function calculateNewCursorPos(oldPos, oldValue, newValue) {
+        if (oldPos === 0) return 0;
+
+        // Считаем сколько нецифровых символов было до позиции курсора в старом значении
+        let nonDigitCountBefore = 0;
+        for (let i = 0; i < Math.min(oldPos, oldValue.length); i++) {
+            if (!/\d/.test(oldValue[i])) {
+                nonDigitCountBefore++;
+            }
+        }
+
+        // Цифр до позиции курсора
+        let digitsBefore = oldPos - nonDigitCountBefore;
+
+        // Находим позицию в новом значении
+        let newPos = 0;
+        let digitsFound = 0;
+
+        for (let i = 0; i < newValue.length; i++) {
+            if (digitsFound >= digitsBefore) {
+                break;
+            }
+            if (/\d/.test(newValue[i])) {
+                digitsFound++;
+            }
+            newPos++;
+        }
+
+        return newPos;
+    }
+
+    function formatWithSpaces(numberStr) {
+        if (!numberStr) return '';
+
+        // Определяем знак
+        let sign = '';
+        if (numberStr.startsWith('-')) {
+            sign = '-';
+            numberStr = numberStr.substring(1);
+        }
+
+        // Разделяем целую и дробную части
+        let parts = numberStr.split('.');
+        let integerPart = parts[0].replace(/\D/g, '');
+        let decimalPart = parts.length > 1 ? '.' + parts[1].replace(/\D/g, '') : '';
+
+        // Добавляем пробелы как разделители тысяч
+        if (integerPart.length > 3) {
+            let formattedInteger = '';
+            let count = 0;
+
+            for (let i = integerPart.length - 1; i >= 0; i--) {
+                if (count > 0 && count % 3 === 0) {
+                    formattedInteger = ' ' + formattedInteger;
+                }
+                formattedInteger = integerPart[i] + formattedInteger;
+                count++;
+            }
+            integerPart = formattedInteger;
+        }
+
+        return sign + integerPart + decimalPart;
+    }
+
+    function finalizeFormat(input) {
+        // Удаляем лишние пробелы в начале и конце
+        input.value = input.value.trim();
+
+        // Если значение пустое, ставим 0
+        if (!input.value || input.value === '-' || input.value === '.') {
+            input.value = '0';
+        }
+
+        // Обновляем отображение
+        updateDisplay();
+    }
+
+    function updateDisplay() {
+        // Обновляем отображение в формуле
+        document.getElementById('display-num1').textContent =
+            document.getElementById('number1').value.replace(/,/g, '.') || '0';
+        document.getElementById('display-num2').textContent =
+            document.getElementById('number2').value.replace(/,/g, '.') || '0';
+        document.getElementById('display-num3').textContent =
+            document.getElementById('number3').value.replace(/,/g, '.') || '0';
+        document.getElementById('display-num4').textContent =
+            document.getElementById('number4').value.replace(/,/g, '.') || '0';
+
+        // Обновляем символы операций
+        document.querySelectorAll('.expression-operator')[0].textContent =
+            document.getElementById('op1').options[document.getElementById('op1').selectedIndex].text;
+        document.querySelectorAll('.expression-operator')[1].textContent =
+            document.getElementById('op2').options[document.getElementById('op2').selectedIndex].text;
+        document.querySelectorAll('.expression-operator')[2].textContent =
+            document.getElementById('op3').options[document.getElementById('op3').selectedIndex].text;
+    }
+
+    function clearForm() {
+        // Очищаем все поля
+        document.getElementById('number1').value = '0';
+        document.getElementById('number2').value = '0';
+        document.getElementById('number3').value = '0';
+        document.getElementById('number4').value = '0';
+
+        // Сбрасываем операции на сложение
+        document.getElementById('op1').selectedIndex = 0;
+        document.getElementById('op2').selectedIndex = 0;
+        document.getElementById('op3').selectedIndex = 0;
+
+        // Сбрасываем округление на математическое
+        document.getElementById('roundingType').selectedIndex = 0;
+
+        // Обновляем отображение
+        updateDisplay();
+
+        // Фокус на первое поле
+        document.getElementById('number1').focus();
+        document.getElementById('number1').select();
+    }
+
+    function showTempMessage(message) {
+        const tempMsg = document.createElement('div');
+        tempMsg.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ff4444;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            font-family: Arial, sans-serif;
+        `;
+        tempMsg.textContent = message;
+        document.body.appendChild(tempMsg);
+
+        setTimeout(() => {
+            if (tempMsg.parentNode) {
+                document.body.removeChild(tempMsg);
+            }
+        }, 3000);
+    }
+
+    // Инициализация при загрузке
     document.addEventListener('DOMContentLoaded', function() {
-        const number1Input = document.getElementById('number1');
-        if (number1Input && !number1Input.value) {
-            number1Input.focus();
+        // Форматируем существующие значения
+        document.querySelectorAll('.number-input').forEach(input => {
+            if (input.value && input.value !== '0') {
+                formatNumberInput(input);
+            }
+        });
+
+        // Обновляем отображение формулы
+        updateDisplay();
+
+        // Фокус на первое поле если оно пустое
+        const firstInput = document.getElementById('number1');
+        if (firstInput && (!firstInput.value || firstInput.value === '0')) {
+            firstInput.focus();
         }
     });
+
+    // Пример для быстрого заполнения
+    function fillExample() {
+        document.getElementById('number1').value = '986 282 584 876.635029';
+        document.getElementById('number2').value = '123 456.666666';
+        document.getElementById('number3').value = '987 654.777777';
+        document.getElementById('number4').value = '8.888888';
+
+        // Устанавливаем операции: - * -
+        document.getElementById('op1').value = 'SUBTRACT';
+        document.getElementById('op2').value = 'MULTIPLY';
+        document.getElementById('op3').value = 'SUBTRACT';
+
+        updateDisplay();
+        formatNumberInput(document.getElementById('number1'));
+        formatNumberInput(document.getElementById('number2'));
+        formatNumberInput(document.getElementById('number3'));
+        formatNumberInput(document.getElementById('number4'));
+    }
 </script>
+
+<!-- Кнопка для заполнения примера (опционально) -->
+<div style="position: fixed; bottom: 20px; right: 20px;">
+    <button onclick="fillExample()" style="
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        ">
+        Заполнить пример
+    </button>
+</div>
 </body>
 </html>
